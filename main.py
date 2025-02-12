@@ -1,45 +1,98 @@
-from models import Simulation
+import models
 
+start_month = 2
+months = 2
 city_1 = {
-    "name": "Moscow",
-    "city_type": "megapolis",
-    "population": 120,
-    "internal_transport": 0.9,
-    "external_transport": 0.8,
-    "number_infected": 100
+    'name': 'Москва',
+    'population': 1000,
+    'city_type': 'megapolis',
+    'transport': 0.5,
+    'number_vaccinated': 100,
+    'number_infected': 100,
 }
 city_2 = {
-    "name": "Perm",
-    "city_type": "town",
-    "population": 20,
-    "internal_transport": 0.6,
-    "external_transport": 0.3,
-    "number_infected": 18
+    'name': 'Санкт-Петербург',
+    'population': 850,
+    'city_type': 'megapolis',
+    'transport': 0.6,
+    'number_vaccinated': 120,
+    'number_infected': 80,
+}
+city_3 = {
+    'name': 'Новосибирск',
+    'population': 600,
+    'city_type': 'medium',
+    'transport': 0.4,
+    'number_vaccinated': 80,
+    'number_infected': 60,
+}
+city_4 = {
+    'name': 'Екатеринбург',
+    'population': 700,
+    'city_type': 'medium',
+    'transport': 0.5,
+    'number_vaccinated': 0,
+    'number_infected': 0,
+}
+city_5 = {
+    'name': 'Казань',
+    'population': 500,
+    'city_type': 'medium',
+    'transport': 0.45,
+    'number_vaccinated': 0,
+    'number_infected': 0,
+}
+city_6 = {
+    'name': 'Нижнний Новгород',
+    'population': 450,
+    'city_type': 'medium',
+    'transport': 0.42,
+    'number_vaccinated': 0,
+    'number_infected': 0,
+}
+city_7 = {
+    'name': 'Самара',
+    'population': 400,
+    'city_type': 'medium',
+    'transport': 0.38,
+    'number_vaccinated': 0,
+    'number_infected': 0,
+}
+city_8 = {
+    'name': 'Омск',
+    'population': 350,
+    'city_type': 'town',
+    'transport': 0.3,
+    'number_vaccinated': 0,
+    'number_infected': 0,
+}
+city_9 = {
+    'name': 'Ростов на Дону',
+    'population': 300,
+    'city_type': 'town',
+    'transport': 0.28,
+    'number_vaccinated': 0,
+    'number_infected': 0,
+}
+city_10 = {
+    'name': 'Пермь',
+    'population': 320,
+    'city_type': 'town',
+    'transport': 0.32,
+    'number_vaccinated': 0,
+    'number_infected': 0,
 }
 government_data = {
-    "name": "Russia",
-    "budget": 0,
-    "vaccine_cost": 2,
-    "cities_data": [city_1, city_2]
+    'name': 'Россия',
+    'budget': 1000,
+    'vaccine_cost': 10,
+    'cities_data': [city_1, city_2, city_3, city_4, city_5, city_6, city_7, city_8, city_9, city_10],
 }
 
-simulation = Simulation(months=1, start_month=9, government_data=government_data, user_play=False)
-simulation.run()
 
-print("\nСтатистика после завершения симуляции:")
-for step, stats in enumerate(simulation.history):
-    print(f"\nШаг {step + 1}:")
-    print(f"  Бюджет: {stats['government']['budget']}")
-    print(f"  Общее число вакцинированных: {stats['government']['number_vaccinated']}")
-    print(f"  Общее число заболевших: {stats['government']['number_infected']}")
-    print(f"  Общее число здоровых непривитых: {stats['government']['number_innocent']}")
-    print(f"  Общее число работающих: {stats['government']['number_workers']}")
+simulation = models.Simulation(start_month=start_month, months=months, government_data=government_data)
+visualizer = models.Visualizer(simulation)
+visualizer.run()
 
-    print("\n  Статистика по городам:")
-    for city_stats in stats['cities']:
-        print(f"    Город: {city_stats['name']}")
-        print(f"      Население: {city_stats['population']}")
-        print(f"      Вакцинированные: {city_stats['number_vaccinated']}")
-        print(f"      Заболевшие: {city_stats['number_infected']}")
-        print(f"      Здоровые непривитые: {city_stats['number_innocent']}")
-        print(f"      Работающие: {city_stats['number_workers']}")
+
+# print_simulation_history(simulation)

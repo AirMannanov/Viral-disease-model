@@ -1,3 +1,4 @@
+import math
 from typing import Dict, TypedDict
 
 
@@ -8,11 +9,8 @@ INFECTED_RATE_3_WEEKS = 0.15
 INFECTED_RATE_2_WEEKS = 0.6
 INFECTED_RATE_1_WEEKS = 1 - INFECTED_RATE_3_WEEKS - INFECTED_RATE_2_WEEKS
 
-W_INFECTED_RATE   = 3
-W_VACCINATED_RATE = 1
-W_INT_TRANSPORT   = 0.5
 
-W_EXT_TRANSPORT   = 0.25
+BASE_RATE         = 1.5
 W_TYPE_CITY       = lambda x: {'megapolis': 1.5, 'medium': 1.25, 'town': 1}[x]
 W_MONTH           = lambda x: 1.5 if 9 <= x <= 3 else 1
 
@@ -21,8 +19,7 @@ class CityData(TypedDict):
     name: str
     city_type: str
     population: int
-    internal_transport: float
-    external_transport: float
+    transport: float
     number_vaccinated: int
     number_infected: int
 
@@ -37,8 +34,7 @@ class CityStatisticsData(TypedDict):
 
 
 class City:
-    def __init__(self, name: str, city_type: str, population: int,
-                 internal_transport: float, external_transport: float,
+    def __init__(self, name: str, city_type: str, population: int, transport: float,
                  number_vaccinated: int = 0, number_infected: int = 0) -> None:
         """
         Инициализация города.
@@ -46,22 +42,18 @@ class City:
         :param name: Название города.
         :param city_type: Тип города ("megapolis", "medium", "town").
         :param population: Численность населения.
-        :param internal_transport: Уровень внутригородского транспорта (0.0 - 1.0).
-        :param external_transport: Уровень междугороднего транспорта (0.0 - 1.0).
+        :param transport: Уровень транспорта (0.0 - 1.0).
         :param number_vaccinated: Начальное число вакцин.
         :param number_infected: Начальное число заболевших.
         """
-        if not (0 <= internal_transport <= 1):
-            raise ValueError("internal_transport must be in [0, 1]")
-        if not (0 <= external_transport <= 1):
-            raise ValueError("external_transport must be in [0, 1]")
+        if not (0 <= transport <= 1):
+            raise ValueError("transport must be in [0, 1]")
         if city_type not in ["megapolis", "medium", "town"]:
             raise ValueError("city_type must be 'megapolis', 'medium' or 'town'")
 
         self.name = name
         self.population = population
-        self.internal_transport = internal_transport
-        self.external_transport = external_transport
+        self.transport = transport
         self.city_type = city_type
 
         self.vaccinated: Dict[int, int] = {
@@ -109,33 +101,38 @@ class City:
             self.infected[week] = self.infected[week + 1]
         self.infected[3] = 0
 
-    def _spread_infection(self, month: int) -> None:
+    def _spread_infection(self, month: int, government_factor: float = 0) -> None:
         """Моделирует распространение инфекции."""
         def modeling_spread_infection() -> int:
-            numerator  = W_INFECTED_RATE * self.number_infected / self.population
-            numerator += W_INT_TRANSPORT * self.internal_transport
-            numerator += W_EXT_TRANSPORT * self.external_transport
-            numerator *= W_TYPE_CITY(self.city_type) * W_MONTH(month)
-            numerator -= W_VACCINATED_RATE * self.number_vaccinated / self.population
+            seasonal_factor = W_MONTH(month)
+            city_factor =  W_TYPE_CITY(self.city_type)
+            transport_factor = self.transport
+            vaccine_effect = math.exp(-self.number_vaccinated / self.population * 5)
+            infection_growth = (self.number_infected / self.population) ** 0.5
+            infection_growth = government_factor if infection_growth == 0 else infection_growth
 
-            denominator = W_INFECTED_RATE + W_INT_TRANSPORT + W_EXT_TRANSPORT
-            denominator *= W_MONTH(month) * W_TYPE_CITY(self.city_type)
-            denominator -= W_VACCINATED_RATE
-
-            new_infected = int(self.number_innocent * numerator / denominator)
-
-            return new_infected if new_infected > 0 else 0
+            new_infected = int(
+                self.number_innocent *
+                BASE_RATE *
+                seasonal_factor *
+                transport_factor *
+                vaccine_effect *
+                infection_growth *
+                city_factor
+            )
+            new_infected = max(0, min(new_infected, self.number_innocent))
+            return new_infected
 
         new_infected = modeling_spread_infection()
         self.infected[3] += int(INFECTED_RATE_3_WEEKS * new_infected)
         self.infected[2] += int(INFECTED_RATE_2_WEEKS * new_infected)
         self.infected[1] += int(INFECTED_RATE_1_WEEKS * new_infected)
 
-    def update_state(self, month: int, number_vaccines: int) -> None:
+    def update_state(self, month: int, number_vaccines: int, government_factor: float = 0) -> None:
         """Обновляет состояние города: вакцинация, распространение, выздоровление."""
         self._allocate_vaccines(number_vaccines)
         self._recover_people()
-        self._spread_infection(month)
+        self._spread_infection(month, government_factor)
 
     def get_statistics(self) -> CityStatisticsData:
         """Возвращает статистику по городу."""

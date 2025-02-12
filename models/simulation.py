@@ -3,8 +3,7 @@ from typing import List, Dict
 
 class Simulation:
     def __init__(self, months: int, start_month: int,
-                 government_data: GovernmentData,
-                 user_play: bool = True) -> None:
+                 government_data: GovernmentData) -> None:
         """
         Инициализация симуляции.
 
@@ -14,42 +13,40 @@ class Simulation:
         :param user_play: Флаг, указывающий на ручное или автоматическое распределение вакцин.
         """
         self.months = months
+        self.start_month = start_month
         self.current_month = start_month
         self.current_week = 0
         self.government = Government(**government_data)
-        self.allocate_vaccines = self._user_allocate_vaccines if user_play else self._auto_allocate_vaccines
-        self.history: List[StatisticsData] = [] # Статистика по всем шагам симуляции
+        self.history: List[StatisticsData] = [self.government.get_statistics()] # Статистика по всем шагам симуляции
 
-    def _auto_allocate_vaccines(self) -> Dict[str, int]:
+    def _allocate_vaccines(self, money: int) -> Dict[str, int]:
         """
         Определяет распределение вакцин по городам на текущий шаг.
+
+        :param money: Доступный бюджет.
         :return: Словарь {название_города: кол-во вакцин}.
         """
+        if money > self.government.budget:
+            raise ValueError("Недостаточно бюджета для распределения вакцин.")
+
         allocation = {}
-        can_vaccinate_rate = self.government.budget // self.government.vaccine_cost / self.government.population
+        can_vaccinate_rate = money / self.government.vaccine_cost / self.government.population
         for city in self.government.cities:
             allocation[city.name] = int(can_vaccinate_rate * city.population)
 
         return allocation
 
-    def _user_allocate_vaccines(self) -> Dict[str, int]:
+    def make_step(self, money: int) -> None:
         """
-        Запрашивает у пользователя распределение вакцин по городам на текущий шаг.
-        :return: Словарь {название_города: кол-во вакцин}.
-        """
-        pass
+        Выполняет один шаг симуляции (неделя).
 
-    def make_step(self):
-        """Выполняет один шаг симуляции (неделя)."""
-        vaccine_distribution = self.allocate_vaccines()
+        :param money: Количество денег для вакцин.
+        """
+        vaccine_distribution = self._allocate_vaccines(money)
         self.government.update_state(self.current_month, vaccine_distribution)
 
         self.current_week += 1
         if self.current_week % 4 == 0:
             self.current_month = (self.current_month + 1) % 12
 
-    def run(self):
-        """Запускает симуляцию."""
-        for _ in range(self.months * 4):
-            self.make_step()
-            self.history.append(self.government.get_statistics())
+        self.history.append(self.government.get_statistics())

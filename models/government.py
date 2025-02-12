@@ -2,7 +2,7 @@ from .city import City, CityData, CityStatisticsData
 from typing import List, Dict, TypedDict
 
 
-TAX_PER_PRESON = 2
+TAX_PER_PRESON = 1.5
 TAX_RATE_PAYMENT = 0.65
 
 
@@ -10,7 +10,7 @@ class GovernmentData(TypedDict):
     name: str
     budget: int
     vaccine_cost: int
-    cities: List[CityData]
+    cities_data: List[CityData]
 
 
 class GovernmentStatisticsData(TypedDict, CityStatisticsData):
@@ -42,6 +42,7 @@ class Government:
         self.budget = budget
         self.vaccine_cost = vaccine_cost
         self.cities = [City(**params) for params in cities_data]
+        self.government_factor = (self.number_infected / self.population) ** 0.5
 
     def _update_budget(self) -> None:
         """Обновляет бюджет с учётом оплаты налогов."""
@@ -60,7 +61,7 @@ class Government:
                 raise ValueError(f"Недостаточно бюджета для распределения {num_vaccines} вакцин в городе {city.name}. \
                                  Требуется: {num_vaccines * self.vaccine_cost}, доступно: {self.budget}")
             self.budget -= num_vaccines * self.vaccine_cost
-            city.update_state(month, num_vaccines)
+            city.update_state(month, num_vaccines, self.government_factor)
 
     def update_state(self, month: int, vaccines: Dict[str, int]) -> None:
         """
@@ -72,6 +73,7 @@ class Government:
         """
         self._update_budget()
         self._update_cities_state(month, vaccines)
+        self.government_factor = (self.number_infected / self.population) ** 0.5
 
     @property
     def population(self) -> int:
