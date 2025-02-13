@@ -92,7 +92,7 @@ government_data = {
 
 simulation = models.Simulation(start_month=start_month, months=months, government_data=government_data)
 visualizer = models.Visualizer(simulation)
-visualizer.run()
+visualizer.run_simulation()
 
 
 # print_simulation_history(simulation)

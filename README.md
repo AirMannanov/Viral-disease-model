@@ -16,7 +16,7 @@
 2. Клонируй репозиторий:
     ```bash
     git clone https://github.com/AirMannanov/Viral-disease-model.git
-    cd название-репозитория
+    cd Viral-disease-model
 3. Установи зависимости:
     ```bash
     pip install -r requirements.txt
