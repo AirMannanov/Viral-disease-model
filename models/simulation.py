@@ -1,6 +1,7 @@
 from .government import Government, GovernmentData, StatisticsData
 from typing import List, Dict
 
+
 class Simulation:
     def __init__(self, months: int, start_month: int,
                  government_data: GovernmentData) -> None:

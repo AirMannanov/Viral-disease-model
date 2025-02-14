@@ -1,19 +1,65 @@
 from .simulation import Simulation
+from .config import *
+from .city import CityData
+from typing import List
 import pygame
 import sys
 
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
+RED = (255, 0, 0)
 GREEN = (0, 255, 0)
+BLUE = (0, 102, 204)
 YELLOW = (255, 255, 0)
 CYANIC = (0, 255, 255)
-RED = (255, 0, 0)
 GRAY = (200, 200, 200)
 
 
+class TextBox:
+    def __init__(self, x: int, y: int, w: int, h: int, text: str,
+                 color=WHITE, text_color=BLACK,
+                 border_color=BLACK, border_width: int=1, border_radius: int=10,
+                 font: pygame.font.Font = None):
+        self.rect = pygame.Rect(x, y, w, h)
+        self.border_rect = pygame.Rect(x - border_width, y - border_width, w + 2 * border_width, h + 2 * border_width)
+        self.color = color
+        self.border_color = border_color
+        self.text_color = text_color
+        self.border_radius = border_radius
+        font = pygame.font.Font(None, 36) if font is None else font
+        self.text_surface = font.render(text, True, text_color)
+        self.text_rect = self.text_surface.get_rect(center=self.rect.center)
+
+    def draw(self, screen: pygame.Surface):
+        pygame.draw.rect(screen, self.border_color, self.border_rect, border_radius=self.border_radius)
+        pygame.draw.rect(screen, self.color, self.rect, border_radius=self.border_radius)
+        screen.blit(self.text_surface, self.text_rect)
+
+
+class Button(TextBox):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def is_clicked(self, event: pygame.event.Event):
+        return event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos)
+
+
+class SelectBox(TextBox):
+    def __init__(self, *args, color_clicked=RED, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.color_clicked = color_clicked
+
+    def is_clicked(self, event: pygame.event.Event):
+        return event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos)
+
+    def press(self):
+        self.color, self.color_clicked = self.color_clicked, self.color
+
+
 class InputBox:
-    def __init__(self, x: int, y: int , w: int, h: int, text: str=None, base_text: str=None, defualt: str='0',
+    def __init__(self, x: int, y: int , w: int, h: int,
+                 text: str=None, base_text: str=None, defualt: str=None,
                  color=WHITE, text_color=BLACK,
                  border_color=BLACK, border_width: int=1, border_radius: int=10,
                  font: pygame.font.Font = None):
@@ -23,9 +69,9 @@ class InputBox:
         self.text_color = text_color
         self.border_color = border_color
         self.border_radius = border_radius
-        self.base_text = 'Ввод число: ' if base_text is None else base_text
         self.text = '' if text is None else text
-        self.defualt = defualt
+        self.base_text = 'Ввод число: ' if base_text is None else base_text
+        self.defualt = '0' if defualt is None else defualt
         self.error_message = ''
         self.font = pygame.font.Font(None, 36) if font is None else font
         self.active = False
@@ -47,30 +93,8 @@ class InputBox:
                 text_surface = self.font.render(self.base_text + self.text, True, self.text_color)
             screen.blit(text_surface, text_surface.get_rect(center=self.rect.center))
 
-
-class Button:
-    def __init__(self, x: int, y: int, w: int, h: int, text: str,
-                 color=WHITE, text_color=BLACK,
-                 border_color=BLACK, border_width: int=1, border_radius: int=10,
-                 font: pygame.font.Font = None):
-        self.rect = pygame.Rect(x, y, w, h)
-        self.border_rect = pygame.Rect(x - border_width, y - border_width, w + 2 * border_width, h + 2 * border_width)
-        self.color = color
-        self.border_color = border_color
-        self.text_color = text_color
-        self.border_radius = border_radius
-        font = pygame.font.Font(None, 36) if font is None else font
-        self.text_surface = font.render(text, True, text_color)
-        self.text_rect = self.text_surface.get_rect(center=self.rect.center)
-
-    def draw(self, screen: pygame.Surface):
-        pygame.draw.rect(screen, self.border_color, self.border_rect, border_radius=self.border_radius)
-        pygame.draw.rect(screen, self.color, self.rect, border_radius=self.border_radius)
-        screen.blit(self.text_surface, self.text_rect)
-
-    def is_clicked(self, event: pygame.event.Event):
-        return event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos)
-
+    def get_data(self) -> str:
+        return self.defualt if self.text == '' else self.text
 
 class Visualizer:
     WIDTH, HEIGHT = 1200, 700
@@ -99,42 +123,136 @@ class Visualizer:
     ]
     _COORDINATES_POINTS = []
 
-    def __init__(self, simulation: Simulation) -> None:
+    def __init__(self) -> None:
         pygame.init()
 
-        self.simulation = simulation
-        self.current_step = 0
-        self.max_step = simulation.months * 4
-        self.selected_city_index = None
         self.fonts = {
             'big': pygame.font.Font(None, 54),
             'medium': pygame.font.Font(None, 36),
             'small': pygame.font.Font(None, 24)
         }
 
+        self.simulation_running = False
         self.radius_cities = {}
         self.starting_infection = {}
         self.cities_type = []
-        self._set_cities_date()
+        self.selected_city_index: int = None
+        self.clicked_inputbox: InputBox = None
+        self.clicked_selectbox: SelectBox = None
+        self.cities_selectboxes: List[SelectBox] = []
+        self.cities_data: List[CityData] = []
 
-        self.button_color = (100, 100, 255)
+
         padding = int(self.WIDTH_PANEL * 0.04)
         button_width = int(self.WIDTH_PANEL * 0.44)
         button_y_offset = 550
-        spend_budger_inputbox_coords = (self.WIDTH_MAP + padding, button_y_offset - 50 - padding, button_width * 2 + padding , 50)
+
+        start_button_coords = (int(self.WIDTH * 0.35) + padding, int(self.HEIGHT * 0.825), int(self.WIDTH * 0.6) - padding, int(self.HEIGHT * 0.13))
         prev_button_coords = (self.WIDTH_MAP + padding, button_y_offset, button_width, 50)
         next_button_coords = (self.WIDTH_MAP + button_width + 2 * padding, button_y_offset, button_width, 50)
         exit_button_coords = (self.WIDTH_MAP + padding, button_y_offset + 50 + padding, button_width * 2 + padding , 50)
+        spend_budger_inputbox_coords = (self.WIDTH_MAP + padding, button_y_offset - 50 - padding, button_width * 2 + padding , 50)
+        textbox_coords = (self.WIDTH_MAP + padding, button_y_offset - 2 * (50 + padding), button_width * 2 + padding , 50)
 
+        self.start_button = Button(*start_button_coords, "Начать симуляцию", color=RED, text_color=WHITE, font=self.fonts['big'])
         self.prev_button = Button(*prev_button_coords, "Предыдущий шаг", font=self.fonts['small'])
         self.next_button = Button(*next_button_coords, "Следующий шаг", font=self.fonts['small'])
         self.exit_button = Button(*exit_button_coords, "Установить новую конфигурацию", font=self.fonts['small'])
+        self.textbox = TextBox(*textbox_coords, "Затраты на вакцины", color=BLUE, text_color=WHITE, font=self.fonts['small'])
         self.spend_budget = InputBox(*spend_budger_inputbox_coords, text='0', font=self.fonts['small'])
+
+        header_textbox_coords = (int(self.WIDTH * 0.03), int(self.HEIGHT * 0.03), int(self.WIDTH * 0.94), 60)
+
+        x_textbox, y_textbox = int(self.WIDTH * 0.05), int(self.HEIGHT * 0.03) + padding + 60
+        dx_textbox, dy_textbox = int(self.WIDTH * 0.3), 40
+
+        x_inputbox = int(self.WIDTH * 0.06)
+        dx_inputbox = int(self.WIDTH * 0.28)
+        margin_inputbox = 12
+
+        duration_textbox_coords = (x_textbox, y_textbox, dx_textbox, dy_textbox)
+        duration_inputbox_coords = (x_inputbox, y_textbox + padding + dy_textbox, dx_inputbox, dy_textbox)
+
+        y_textbox += 2 * (padding + dy_textbox) + margin_inputbox
+        starting_month_textbox_coords  = (x_textbox, y_textbox, dx_textbox, dy_textbox)
+        starting_month_inputbox_coords  = (x_inputbox, y_textbox + padding + dy_textbox, dx_inputbox, dy_textbox)
+
+        y_textbox += 2 * (padding + dy_textbox) + margin_inputbox
+        number_citis_textbox_coords = (x_textbox, y_textbox, dx_textbox, dy_textbox)
+        number_citis_inputbox_coords = (x_inputbox, y_textbox + padding + dy_textbox, dx_inputbox, dy_textbox)
+
+        y_textbox += 2 * (padding + dy_textbox) + margin_inputbox
+        starting_budget_textbox_coords = (x_textbox, y_textbox, dx_textbox, dy_textbox)
+        starting_budget_inputbox_coords = (x_inputbox, y_textbox + padding + dy_textbox, dx_inputbox, dy_textbox)
+
+        y_textbox += 2 * (padding + dy_textbox) + margin_inputbox
+        cost_vaccine_textbox_coords = (x_textbox, y_textbox, dx_textbox, dy_textbox)
+        cost_vaccine_inputbox_coords = (x_inputbox, y_textbox + padding + dy_textbox, dx_inputbox, dy_textbox)
+
+        self.header_textbox = TextBox(*header_textbox_coords, "Симуляция распространения вирусного заболевания", color=BLUE, text_color=WHITE, font=self.fonts['big'])
+
+        self.duration_textbox = TextBox(*duration_textbox_coords, "Укажите длительность моделирования", color=BLUE, text_color=WHITE, font=self.fonts['small'])
+        self.duration_inputbox = InputBox(*duration_inputbox_coords, base_text="Введите кол-во месяцев: ", color=BLUE, defualt='1', text_color=WHITE, font=self.fonts['small'])
+
+        self.starting_month_textbox = TextBox(*starting_month_textbox_coords, "Укажите начальный месяц", color=BLUE, text_color=WHITE, font=self.fonts['small'])
+        self.starting_month_inputbox = InputBox(*starting_month_inputbox_coords, base_text="Введите номер месяца: ", defualt='1', color=BLUE, text_color=WHITE, font=self.fonts['small'])
+
+        self.number_citis_textbox = TextBox(*number_citis_textbox_coords, "Укажите количество городов", color=BLUE, text_color=WHITE, font=self.fonts['small'])
+        self.number_citis_inputbox = InputBox(*number_citis_inputbox_coords, color=BLUE, defualt='1', text_color=WHITE, font=self.fonts['small'])
+
+        self.starting_budget_textbox = TextBox(*starting_budget_textbox_coords, "Укажите начальный бюджет", color=BLUE, text_color=WHITE, font=self.fonts['small'])
+        self.starting_budget_inputbox = InputBox(*starting_budget_inputbox_coords, color=BLUE, text_color=WHITE, font=self.fonts['small'])
+
+        self.cost_vaccine_textbox = TextBox(*cost_vaccine_textbox_coords, "Укажите стоимость вакцины", color=BLUE, text_color=WHITE, font=self.fonts['small'])
+        self.cost_vaccine_inputbox = InputBox(*cost_vaccine_inputbox_coords, defualt='1', color=BLUE, text_color=WHITE, font=self.fonts['small'])
+
+        x_div, y_div = int(self.WIDTH * 0.6) + 2 * padding, int(self.HEIGHT * 0.03) + padding + 60
+        dx_div, dy_div = int(self.WIDTH * 0.35) - 2 * padding, 459
+        self.div = TextBox(x_div, y_div, dx_div, dy_div, text='', color=GRAY)
+
+        div_padding = 9
+        x_div_elem, y_div_elem = x_div + div_padding, y_div + div_padding
+        dx_div_elem, dy_div_elem = dx_div - 2 * div_padding, 36
+        x_div_input, dx_div_input = x_div_elem + div_padding, dx_div_elem - 2 * div_padding
+
+        div_type_textbox_coords = (x_div_elem, y_div_elem, dx_div_elem, dy_div_elem)
+        div_type_inputbox_coords = (x_div_input, y_div_elem + div_padding + dy_div_elem, dx_div_input, dy_div_elem)
+
+        y_div_elem += 2 * (dy_div_elem + div_padding)
+        div_population_textbox_coords = (x_div_elem, y_div_elem, dx_div_elem, dy_div_elem)
+        div_population_inputbox_coords = (x_div_input, y_div_elem + div_padding + dy_div_elem, dx_div_input, dy_div_elem)
+
+        y_div_elem += 2 * (dy_div_elem + div_padding)
+        div_infected_textbox_coords = (x_div_elem, y_div_elem, dx_div_elem, dy_div_elem)
+        div_infected_inputbox_coords = (x_div_input, y_div_elem + div_padding + dy_div_elem, dx_div_input, dy_div_elem)
+
+        y_div_elem += 2 * (dy_div_elem + div_padding)
+        div_vaccinated_textbox_coords = (x_div_elem, y_div_elem, dx_div_elem, dy_div_elem)
+        div_vaccinated_inputbox_coords = (x_div_input, y_div_elem + div_padding + dy_div_elem, dx_div_input, dy_div_elem)
+
+        y_div_elem += 2 * (dy_div_elem + div_padding)
+        div_transport_textbox_coords = (x_div_elem, y_div_elem, dx_div_elem, dy_div_elem)
+        div_transport_inputbox_coords = (x_div_input, y_div_elem + div_padding + dy_div_elem, dx_div_input, dy_div_elem)
+
+        self.div_type_textbox = TextBox(*div_type_textbox_coords, "Укажите тип города", color=BLUE, text_color=WHITE, font=self.fonts['small'])
+        self.div_type_inputbox = InputBox(*div_type_inputbox_coords, color=BLUE, text_color=WHITE, font=self.fonts['small'])
+
+        self.div_population_textbox = TextBox(*div_population_textbox_coords, "Укажите население", color=BLUE, text_color=WHITE, font=self.fonts['small'])
+        self.div_population_inputbox = InputBox(*div_population_inputbox_coords, color=BLUE, text_color=WHITE, font=self.fonts['small'])
+
+        self.div_infected_textbox = TextBox(*div_infected_textbox_coords, "Укажите количество заражённых", color=BLUE, text_color=WHITE, font=self.fonts['small'])
+        self.div_infected_inputbox = InputBox(*div_infected_inputbox_coords, color=BLUE, text_color=WHITE, font=self.fonts['small'])
+
+        self.div_vaccinated_textbox = TextBox(*div_vaccinated_textbox_coords, "Укажите количество вакцинированных", color=BLUE, text_color=WHITE, font=self.fonts['small'])
+        self.div_vaccinated_inputbox = InputBox(*div_vaccinated_inputbox_coords, color=BLUE, text_color=WHITE, font=self.fonts['small'])
+
+        self.div_transport_textbox = TextBox(*div_transport_textbox_coords, "Укажите уровнь транспорта", color=BLUE, text_color=WHITE, font=self.fonts['small'])
+        self.div_transport_inputbox = InputBox(*div_transport_inputbox_coords, color=BLUE, text_color=WHITE, font=self.fonts['small'])
 
         for rate in self._RATE_CITIES_POINT:
             self._COORDINATES_POINTS.append((int(rate[0] * self.WIDTH_MAP), rate[1] * self.HEIGHT))
 
-    def _set_cities_date(self) -> None:
+    def _set_cities_data(self) -> None:
         """Установка радиусов городов."""
         min_population, max_population = None, None
         for city in self.simulation.government.cities:
@@ -247,7 +365,7 @@ class Visualizer:
         pygame.draw.rect(self.screen, GRAY, (rect_x, rect_y, rect_width, rect_height), border_radius=10)
         pygame.draw.rect(self.screen, BLACK, (rect_x, rect_y, rect_width, rect_height), 1, 10)
 
-        month_text = self.fonts['small'].render(f"Месяц: {self.MONTHS[month - 1]}", True, BLACK)
+        month_text = self.fonts['small'].render(f"Месяц: {self.MONTHS[month % 12 - 1]}", True, BLACK)
         week_text = self.fonts['small'].render(f"Неделя: {week}", True, BLACK)
 
         self.screen.blit(month_text, (rect_x + 10, rect_y + 25))
@@ -256,13 +374,68 @@ class Visualizer:
     def _draw_buttons_simulation(self) -> None:
         """Отображает кнопку для перехода к следующему шагу симуляции."""
         if self.current_step + 1 == len(self.simulation.history) and self.current_step < self.max_step:
+            self.textbox.draw(self.screen)
             self.spend_budget.draw(self.screen)
         self.prev_button.draw(self.screen)
         self.next_button.draw(self.screen)
         self.exit_button.draw(self.screen)
 
+    def _draw_setup_menu(self) -> None:
+
+        self.header_textbox.draw(self.screen)
+        self.start_button.draw(self.screen)
+
+        self.duration_textbox.draw(self.screen)
+        self.duration_inputbox.draw(self.screen)
+
+        self.starting_month_textbox.draw(self.screen)
+        self.starting_month_inputbox.draw(self.screen)
+
+        self.number_citis_textbox.draw(self.screen)
+        self.number_citis_inputbox.draw(self.screen)
+
+        self.starting_budget_textbox.draw(self.screen)
+        self.starting_budget_inputbox.draw(self.screen)
+
+        self.cost_vaccine_textbox.draw(self.screen)
+        self.cost_vaccine_inputbox.draw(self.screen)
+
+        for selectbox in self.cities_selectboxes:
+            selectbox.draw(self.screen)
+
+        if self.clicked_selectbox is not None:
+            city = self.cities_data[self.cities_selectboxes.index(self.clicked_selectbox)]
+            self.div.draw(self.screen)
+
+            self.div_type_textbox.draw(self.screen)
+            if city['city_type'] == "megapolis":
+                self.div_type_inputbox.defualt = 'мегаполис'
+            elif city['city_type'] == "medium":
+                self.div_type_inputbox.defualt = 'город'
+            elif city['city_type'] == "town":
+                self.div_type_inputbox.defualt = 'посёлок'
+            else:
+                raise AttributeError("Somthing went wrong.")
+            self.div_type_inputbox.draw(self.screen)
+
+            self.div_population_textbox.draw(self.screen)
+            self.div_population_inputbox.defualt = str(city['population'])
+            self.div_population_inputbox.draw(self.screen)
+
+            self.div_infected_textbox.draw(self.screen)
+            self.div_infected_inputbox.defualt = str(city['number_infected'])
+            self.div_infected_inputbox.draw(self.screen)
+
+            self.div_vaccinated_textbox.draw(self.screen)
+            self.div_vaccinated_inputbox.defualt = str(city['number_vaccinated'])
+            self.div_vaccinated_inputbox.draw(self.screen)
+
+            self.div_transport_textbox.draw(self.screen)
+            self.div_transport_inputbox.defualt = str(int(100 * city['transport']))
+            self.div_transport_inputbox.draw(self.screen)
+
     def _handle_events_simulation(self) -> None:
-        """Обработчик событий."""
+        """Обработчик событий во время симуляции."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -289,7 +462,8 @@ class Visualizer:
                         self.current_step += 1
 
                 elif self.exit_button.is_clicked(event):
-                    pass
+                    self.selected_city_index = None
+                    self.simulation_running = False
 
                 else:
                     for index, (_, radius) in enumerate(self.radius_cities.items()):
@@ -317,24 +491,281 @@ class Visualizer:
                         self.spend_budget.error_message = "Только цифры!"
                         self.spend_budget.text = ''
 
+    def _check_input_symbol(self, symbol: str) -> None:
+        if not isinstance(self.clicked_inputbox, InputBox):
+            raise AttributeError("Somthing went wrong.")
+        self.clicked_inputbox: InputBox
+
+        if self.clicked_inputbox == self.duration_inputbox:
+            if symbol.isdigit():
+                self.clicked_inputbox.text += symbol
+                if not (1 <= int(self.clicked_inputbox.text) <= 120):
+                    self.clicked_inputbox.error_message = "Число из диапазона [1, 120]"
+                    self.clicked_inputbox.text = ''
+            else:
+                self.clicked_inputbox.error_message = "Только цифры!"
+                self.clicked_inputbox.text = ''
+
+        elif self.clicked_inputbox == self.starting_month_inputbox:
+            if symbol.isdigit():
+                self.clicked_inputbox.text += symbol
+                if not (1 <= int(self.clicked_inputbox.text) <= 12):
+                    self.clicked_inputbox.error_message = "Число из диапазона [1, 12]"
+                    self.clicked_inputbox.text = ''
+            else:
+                self.clicked_inputbox.error_message = "Только цифры!"
+                self.clicked_inputbox.text = ''
+
+        elif self.clicked_inputbox == self.number_citis_inputbox :
+            if symbol.isdigit():
+                self.clicked_inputbox.text += symbol
+                if not (1 <= int(self.clicked_inputbox.text) <= 10):
+                    self.clicked_inputbox.error_message = "Число из диапазона [1, 10]"
+                    self.clicked_inputbox.text = ''
+            else:
+                self.clicked_inputbox.error_message = "Только цифры!"
+                self.clicked_inputbox.text = ''
+            self._citites_list_control()
+
+        elif self.clicked_inputbox == self.starting_budget_inputbox:
+            if symbol.isdigit():
+                self.clicked_inputbox.text += symbol
+                if not (0 <= int(self.clicked_inputbox.text) <= 1000000000000):
+                    self.clicked_inputbox.error_message = "Число из диапазона [0, 10 ^ 12]"
+                    self.clicked_inputbox.text = ''
+            else:
+                self.clicked_inputbox.error_message = "Только цифры!"
+                self.clicked_inputbox.text = ''
+
+        elif self.clicked_inputbox == self.cost_vaccine_inputbox:
+            if symbol.isdigit():
+                self.clicked_inputbox.text += symbol
+                if not (1 <= int(self.clicked_inputbox.text) <= 10000000):
+                    self.clicked_inputbox.error_message = "Число из диапазона [1, 10 ^ 6]"
+                    self.clicked_inputbox.text = ''
+            else:
+                self.clicked_inputbox.error_message = "Только цифры!"
+                self.clicked_inputbox.text = ''
+
+        elif self.clicked_inputbox == self.div_type_inputbox:
+            if symbol.lower() == 'м':
+                self.clicked_inputbox.text = 'мегаполис'
+            elif symbol.lower() == 'г':
+                self.clicked_inputbox.text = 'город'
+            elif symbol.lower() == 'п':
+                self.clicked_inputbox.text = 'посёлок'
+            else:
+                self.clicked_inputbox.error_message = "На выбор буквы: 'м', 'г', 'п'"
+                self.clicked_inputbox.text = ''
+
+        elif self.clicked_inputbox == self.div_population_inputbox:
+            if symbol.isdigit():
+                self.clicked_inputbox.text += symbol
+                if not (0 <= int(self.clicked_inputbox.text) <= 10000000000000):
+                    self.clicked_inputbox.error_message = "Число из диапазона [0, 10 ^ 12]"
+                    self.clicked_inputbox.text = ''
+            else:
+                self.clicked_inputbox.error_message = "Только цифры!"
+                self.clicked_inputbox.text = ''
+
+        elif self.clicked_inputbox == self.div_infected_inputbox:
+            if symbol.isdigit():
+                self.clicked_inputbox.text += symbol
+                number = int(self.clicked_inputbox.text)
+                vaccinated = int(self.div_vaccinated_inputbox.get_data())
+                population = int(self.div_population_inputbox.get_data())
+
+                if not (0 <= number <= 10000000000000):
+                    self.clicked_inputbox.error_message = "Число из диапазона [0, 10 ^ 12]"
+                    self.clicked_inputbox.text = ''
+                if number + vaccinated > population:
+                    self.clicked_inputbox.error_message = "Нельзя провосходить население!"
+                    self.clicked_inputbox.text = ''
+            else:
+                self.clicked_inputbox.error_message = "Только цифры!"
+                self.clicked_inputbox.text = ''
+
+        elif self.clicked_inputbox == self.div_vaccinated_inputbox:
+            if symbol.isdigit():
+                self.clicked_inputbox.text += symbol
+                number = int(self.clicked_inputbox.text)
+                infected = int(self.div_infected_inputbox.get_data())
+                population = int(self.div_population_inputbox.get_data())
+
+                if not (0 <= number <= 10000000000000):
+                    self.clicked_inputbox.error_message = "Число из диапазона [0, 10 ^ 12]"
+                    self.clicked_inputbox.text = ''
+                if number + infected > population:
+                    self.clicked_inputbox.error_message = "Нельзя провосходить население!"
+                    self.clicked_inputbox.text = ''
+            else:
+                self.clicked_inputbox.error_message = "Только цифры!"
+                self.clicked_inputbox.text = ''
+
+        elif self.clicked_inputbox == self.div_transport_inputbox:
+            if symbol.isdigit():
+                self.clicked_inputbox.text += symbol
+                if not (0 <= int(self.clicked_inputbox.text) <= 100):
+                    self.clicked_inputbox.error_message = "Число из диапазона [0, 100]"
+                    self.clicked_inputbox.text = ''
+            else:
+                self.clicked_inputbox.error_message = "Только цифры!"
+                self.clicked_inputbox.text = ''
+
+        else:
+            raise AttributeError("Somthing went wrong.")
+
+    def _add_div_information(self) -> None:
+        if self.clicked_selectbox is not None:
+            city = self.cities_data[self.cities_selectboxes.index(self.clicked_selectbox)]
+
+            if self.div_type_inputbox.get_data() == 'мегаполис':
+                city['city_type'] = 'megapolis'
+            elif self.div_type_inputbox.get_data() == 'город':
+                city['city_type'] = 'medium'
+            elif self.div_type_inputbox.get_data() == 'посёлок':
+                city['city_type'] = 'town'
+            else:
+                raise AttributeError("Somthing went wrong.")
+            city['population'] = int(self.div_population_inputbox.get_data())
+            city['number_infected'] = int(self.div_infected_inputbox.get_data())
+            city['number_vaccinated'] = int(self.div_vaccinated_inputbox.get_data())
+            city['transport'] = float(self.div_transport_inputbox.get_data()) / 100
+
+            self.div_type_inputbox.text = ''
+            self.div_population_inputbox.text = ''
+            self.div_infected_inputbox.text = ''
+            self.div_vaccinated_inputbox.text = ''
+            self.div_transport_inputbox.text = ''
+
+    def _citites_list_control(self) -> None:
+        number = int(self.number_citis_inputbox.get_data())
+        self.clicked_selectbox = None
+        del self.cities_selectboxes
+        del self.cities_data
+        self.cities_selectboxes: List[SelectBox] = []
+        self.cities_data: List[CityData] = []
+
+        padding = int(self.WIDTH_PANEL * 0.04)
+        x_cities, y_cities = int(self.WIDTH * 0.35) + padding, int(self.HEIGHT * 0.03) + padding + 60
+        dx_cities, dy_cities = int(self.WIDTH * 0.25), 45
+        for index in range(1, number + 1):
+            city_coords = (x_cities, y_cities, dx_cities, dy_cities)
+            y_cities += dy_cities + 1
+            self.cities_selectboxes.append(SelectBox(*city_coords, f"Город {index}", font=self.fonts['small'], color=BLUE, text_color=WHITE))
+            self.cities_data.append(government_data['cities_data'][index - 1].copy())
+
+    def _handle_events_setuping(self) -> None:
+        """Обработчик событий во время конфигурации симуляции."""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if self.clicked_inputbox is not None:
+                    self.clicked_inputbox.error_message = ''
+                    self.clicked_inputbox = None
+
+                if self.duration_inputbox.is_clicked(event):
+                    self.clicked_inputbox = self.duration_inputbox
+
+                elif self.starting_month_inputbox.is_clicked(event):
+                    self.clicked_inputbox = self.starting_month_inputbox
+
+                elif self.number_citis_inputbox.is_clicked(event):
+                    self.clicked_inputbox = self.number_citis_inputbox
+
+                elif self.starting_budget_inputbox.is_clicked(event):
+                    self.clicked_inputbox = self.starting_budget_inputbox
+
+                elif self.cost_vaccine_inputbox.is_clicked(event):
+                    self.clicked_inputbox = self.cost_vaccine_inputbox
+
+                elif self.div_type_inputbox.is_clicked(event):
+                    self.clicked_inputbox = self.div_type_inputbox
+
+                elif self.div_population_inputbox.is_clicked(event):
+                    self.clicked_inputbox = self.div_population_inputbox
+
+                elif self.div_infected_inputbox.is_clicked(event):
+                    self.clicked_inputbox = self.div_infected_inputbox
+
+                elif self.div_vaccinated_inputbox.is_clicked(event):
+                    self.clicked_inputbox = self.div_vaccinated_inputbox
+
+                elif self.div_transport_inputbox.is_clicked(event):
+                    self.clicked_inputbox = self.div_transport_inputbox
+
+                elif self.start_button.is_clicked(event):
+                    self._add_div_information()
+                    self._collect_data()
+                    self.simulation_running = True
+                    self._set_cities_data()
+
+                else:
+                    for selectbox in self.cities_selectboxes:
+                        if selectbox.is_clicked(event):
+                            self._add_div_information()
+                            selectbox.press()
+                            if self.clicked_selectbox is not None:
+                                self.clicked_selectbox.press()
+                            self.clicked_selectbox = selectbox
+                            break
+
+            elif event.type == pygame.KEYDOWN and self.clicked_inputbox is not None:
+                if event.key == pygame.K_RETURN:
+                    self.clicked_inputbox = None
+
+                elif event.key == pygame.K_BACKSPACE and self.clicked_inputbox != self.div_type_inputbox:
+                    self.clicked_inputbox.text = self.clicked_inputbox.text[:-1] if self.clicked_inputbox.text != '' else ''
+                    if self.clicked_inputbox == self.number_citis_inputbox:
+                        self._citites_list_control()
+
+                else:
+                    symbol: str = event.unicode
+                    self._check_input_symbol(symbol)
+
+    def _collect_data(self) -> None:
+        simulation_data = {
+            'months': int(self.duration_inputbox.get_data()),
+            'start_month': int(self.starting_month_inputbox.get_data()),
+            'government_data': {
+                'name': 'Программляндия',
+                'budget': int(self.starting_budget_inputbox.get_data()),
+                'vaccine_cost': int(self.cost_vaccine_inputbox.get_data()),
+                'cities_data': self.cities_data,
+            }
+        }
+        self.simulation = Simulation(**simulation_data)
+        self.current_step = 0
+        self.max_step = self.simulation.months * 4
+
     def run_simulation(self):
         """Запустить симуляцию."""
         self.screen = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
         pygame.display.set_caption("Моделирование распространения вируса")
         self.clock = pygame.time.Clock()
+        self._citites_list_control()
 
         running = True
         while running:
-            self._handle_events_simulation()
-
-            month, week = self.simulation.start_month + self.current_step // 4, self.current_step % 4 + 1
-
             self.screen.fill(self.WHITE)
-            self._draw_cities()
-            self._draw_legend()
-            self._draw_month_week(month, week)
-            self._draw_statistics()
-            self._draw_buttons_simulation()
+
+            if self.simulation_running:
+                self._handle_events_simulation()
+
+                month, week = self.simulation.start_month + self.current_step // 4, self.current_step % 4 + 1
+
+                self._draw_cities()
+                self._draw_legend()
+                self._draw_month_week(month, week)
+                self._draw_statistics()
+                self._draw_buttons_simulation()
+
+            else:
+                self._handle_events_setuping()
+                self._draw_setup_menu()
+
 
             pygame.display.flip()
             self.clock.tick(30)

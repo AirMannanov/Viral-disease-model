@@ -23,3 +23,11 @@
 4. Запусти симуляцию
     ```bash
     python main.py
+
+## Скрины
+
+Конфигурация симуляции
+![Конфигурация симуляции](project_plan/initial_screen_result.jpg)
+
+Симуляция
+![Симуляция](project_plan/simulation_screen_result.jpg)
