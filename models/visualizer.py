@@ -45,13 +45,10 @@ class Button(TextBox):
         return event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos)
 
 
-class SelectBox(TextBox):
+class SelectBox(Button):
     def __init__(self, *args, color_clicked=RED, **kwargs):
         super().__init__(*args, **kwargs)
         self.color_clicked = color_clicked
-
-    def is_clicked(self, event: pygame.event.Event):
-        return event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos)
 
     def press(self):
         self.color, self.color_clicked = self.color_clicked, self.color
@@ -95,6 +92,7 @@ class InputBox:
 
     def get_data(self) -> str:
         return self.defualt if self.text == '' else self.text
+
 
 class Visualizer:
     WIDTH, HEIGHT = 1200, 700
@@ -381,7 +379,7 @@ class Visualizer:
         self.exit_button.draw(self.screen)
 
     def _draw_setup_menu(self) -> None:
-
+        """Отображает начальное меню для установки параметров симуляции."""
         self.header_textbox.draw(self.screen)
         self.start_button.draw(self.screen)
 
@@ -492,6 +490,7 @@ class Visualizer:
                         self.spend_budget.text = ''
 
     def _check_input_symbol(self, symbol: str) -> None:
+        """"Проверка и обработка введённых символов с клавиатуры/"""
         if not isinstance(self.clicked_inputbox, InputBox):
             raise AttributeError("Somthing went wrong.")
         self.clicked_inputbox: InputBox
@@ -616,6 +615,7 @@ class Visualizer:
             raise AttributeError("Somthing went wrong.")
 
     def _add_div_information(self) -> None:
+        """Сохраняет введённые данные по городу."""
         if self.clicked_selectbox is not None:
             city = self.cities_data[self.cities_selectboxes.index(self.clicked_selectbox)]
 
@@ -639,6 +639,7 @@ class Visualizer:
             self.div_transport_inputbox.text = ''
 
     def _citites_list_control(self) -> None:
+        """Проводит обработку списков, контролирующих ввод и храненние данных по городам."""
         number = int(self.number_citis_inputbox.get_data())
         self.clicked_selectbox = None
         del self.cities_selectboxes
@@ -726,6 +727,7 @@ class Visualizer:
                     self._check_input_symbol(symbol)
 
     def _collect_data(self) -> None:
+        """Сбор введённых данных пользователем."""
         simulation_data = {
             'months': int(self.duration_inputbox.get_data()),
             'start_month': int(self.starting_month_inputbox.get_data()),
