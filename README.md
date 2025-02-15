@@ -27,7 +27,7 @@
 ## Скрины
 
 Конфигурация симуляции
-![Конфигурация симуляции](project_plan/initial_screen_result.jpg)
+![Конфигурация симуляции](project_plan/initial_screen_result_1.jpg)
 
 Симуляция
-![Симуляция](project_plan/simulation_screen_result.jpg)
+![Симуляция](project_plan/simulation_screen_result_1.jpg)
