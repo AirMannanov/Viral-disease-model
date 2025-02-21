@@ -62,13 +62,14 @@ class SelectBox(Button):
 class InputBox:
     def __init__(self, x: int, y: int , w: int, h: int,
                  text: str=None, base_text: str=None, default: str=None,
-                 color=WHITE, text_color=BLACK,
+                 color=WHITE, text_color=BLACK, color_clicked=WHITE,
                  border_color=BLACK, border_width: int=1, border_radius: int=10,
                  font: pygame.font.Font = None):
         self.rect = pygame.Rect(x, y, w, h)
         self.border_rect = pygame.Rect(x - border_width, y - border_width, w + 2 * border_width, h + 2 * border_width)
         self.color = color
         self.text_color = text_color
+        self.color_clicked = color_clicked
         self.border_color = border_color
         self.border_radius = border_radius
         self.text = '' if text is None else text
@@ -83,7 +84,7 @@ class InputBox:
 
     def draw(self, screen: pygame.Surface) -> None:
         pygame.draw.rect(screen, self.border_color, self.border_rect, border_radius=self.border_radius)
-        pygame.draw.rect(screen, self.color, self.rect, border_radius=self.border_radius)
+        pygame.draw.rect(screen, self.color_clicked if self.active else self.color, self.rect, border_radius=self.border_radius)
 
         if self.error_message:
             if self.color != RED:
@@ -97,6 +98,9 @@ class InputBox:
             else:
                 text_surface = self.font.render(self.base_text + self.text, True, self.text_color)
             screen.blit(text_surface, text_surface.get_rect(center=self.rect.center))
+
+    def press(self):
+        self.color, self.color_clicked = self.color_clicked, self.color
 
     def get_data(self) -> str:
         return self.default if self.text == '' else self.text
@@ -220,13 +224,13 @@ class Visualizer:
         spend_budget_inputbox_coords = (self.WIDTH_MAP + padding, button_y_offset - 50 - padding, button_width * 2 + padding , 50)
         textbox_coords = (self.WIDTH_MAP + padding, button_y_offset - 2 * (50 + padding), button_width * 2 + padding , 50)
 
-        self.start_button = Button(*start_button_coords, "Начать симуляцию", color=RED, font=self.fonts['big'])
+        self.start_button = Button(*start_button_coords, "Начать моделирование", color=RED, font=self.fonts['big'])
         self.prev_button = Button(*prev_button_coords, "Предыдущий шаг", font=self.fonts['small'])
         self.next_button = Button(*next_button_coords, "Следующий шаг", font=self.fonts['small'])
         self.config_button = Button(*config_button_coords, "Установить новую конфигурацию", font=self.fonts['small'])
         self.exit_button = Button(*exit_button_coords, "x", color=RED, font=self.fonts['small'], border_radius=0)
         self.textbox = TextBox(*textbox_coords, "Укажите затраты на вакцины", color=ORANGE, font=self.fonts['small'])
-        self.spend_budget_button = InputBox(*spend_budget_inputbox_coords, base_text="Число:  ", text='0', font=self.fonts['small'])
+        self.spend_budget_button = InputBox(*spend_budget_inputbox_coords, base_text="Число:  ", text='0', color_clicked=ORANGE, font=self.fonts['small'])
 
 
         header_textbox_coords = (int(self.WIDTH * 0.03), int(self.HEIGHT * 0.03), int(self.WIDTH * 0.94), 60)
@@ -257,7 +261,7 @@ class Visualizer:
         cost_vaccine_textbox_coords = (x_textbox, y_textbox, dx_textbox, dy_textbox)
         cost_vaccine_inputbox_coords = (x_inputbox, y_textbox + padding + dy_textbox, dx_inputbox, dy_textbox)
 
-        self.header_textbox = TextBox(*header_textbox_coords, "Симуляция распространения вирусного заболевания", color=BLUE, font=self.fonts['big'])
+        self.header_textbox = TextBox(*header_textbox_coords, "Моделирование распространения вирусного заболевания", color=BLUE, font=self.fonts['big'])
 
         self.duration_textbox = TextBox(*duration_textbox_coords, "Укажите длительность моделирования", color=ORANGE, font=self.fonts['small'])
         self.duration_inputbox = InputBox(*duration_inputbox_coords, base_text="Число от 1 до 12:  ", color=RED, default='1', font=self.fonts['small'])
@@ -355,7 +359,7 @@ class Visualizer:
             self.radius_cities[city.name] = k * city.population + c
 
     def _clean_data(self) -> None:
-        """Очисить данные после симуляции"""
+        """Очисить данные после моделирования"""
         self.selected_city_index = None
         self.starting_infection = {}
         self.cities_type = []
@@ -409,7 +413,8 @@ class Visualizer:
             f"Вакцинированных: {statistics['government']['number_vaccinated']}",
             f"Здоровых: {statistics['government']['population'] - statistics['government']['number_infected'] - statistics['government']['number_vaccinated']}",
             f"Бюджет: {statistics['government']['budget']}",
-            f"Стоимость вакцины: {statistics['government']['vaccine_cost']}"
+            f"Стоимость вакцины: {statistics['government']['vaccine_cost']}",
+            f"Количество городов с эпидемией: {statistics['government']['number_epidemic_cities']} из {statistics['government']['number_cities']}"
         ]
         y_offset = 50 + 2 * padding
         for i, stat in enumerate(stats):
@@ -471,7 +476,7 @@ class Visualizer:
         self.screen.blit(step_text, (rect_x + 10, rect_y + 70))
 
     def _draw_buttons_simulation(self) -> None:
-        """Отображает кнопку для перехода к следующему шагу симуляции."""
+        """Отображает кнопку для перехода к следующему шагу моделирования."""
         self.exit_button.draw(self.screen)
 
         if self.current_step + 1 == len(self.simulation.history) and self.current_step < self.max_step:
@@ -484,7 +489,7 @@ class Visualizer:
         self.config_button.draw(self.screen)
 
     def _draw_setup_menu(self) -> None:
-        """Отображает начальное меню для установки параметров симуляции."""
+        """Отображает начальное меню для установки параметров моделировния."""
         self.exit_button.draw(self.screen)
 
         self.header_textbox.draw(self.screen)
@@ -531,7 +536,7 @@ class Visualizer:
             self.selectbar.draw(self.screen)
 
     def _handle_events_simulation(self) -> None:
-        """Обработчик событий во время симуляции."""
+        """Обработчик событий во время моделирования."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -577,7 +582,7 @@ class Visualizer:
                         self.selected_city_index = None
 
             elif event.type == pygame.KEYDOWN and self.spend_budget_button.active:
-                self.spend_budget_button.error_message == ''
+                self.spend_budget_button.error_message = ''
 
                 if event.key == pygame.K_RETURN:
                     self.spend_budget_button.active = False
@@ -588,11 +593,12 @@ class Visualizer:
                 else:
                     symbol: str = event.unicode
                     if symbol.isdigit():
-                        self.spend_budget_button.text += symbol
-                        money = int(self.spend_budget_button.text) if self.spend_budget_button.text != '' else 0
-                        if self.simulation.government.budget < money:
-                            self.spend_budget_button.error_message = "В доступе нет такой суммы денег!"
-                            self.spend_budget_button.text = ''
+                        if self.spend_budget_button.text != '' or int(symbol) != 0:
+                            self.spend_budget_button.text += symbol
+                            money = int(self.spend_budget_button.text) if self.spend_budget_button.text != '' else 0
+                            if self.simulation.government.budget < money:
+                                self.spend_budget_button.error_message = "В доступе нет такой суммы денег!"
+                                self.spend_budget_button.text = ''
                     else:
                         self.spend_budget_button.error_message = "Только цифры!"
                         self.spend_budget_button.text = ''
@@ -775,7 +781,7 @@ class Visualizer:
         self.div_transport_inputbox.default = str(int(100 * city['transport']))
 
     def _handle_events_setuping(self) -> None:
-        """Обработчик событий во время конфигурации симуляции."""
+        """Обработчик событий во время конфигурации моделирования."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -787,30 +793,35 @@ class Visualizer:
 
                 elif (self.clicked_box is not None and
                       self.clicked_box != self.div_type_selectbox):
+                    self.clicked_box.press()
                     self.clicked_box.error_message = ''
                     self.clicked_box = None
 
                 if self.clicked_box == self.div_type_selectbox:
                     if self.selectbar.is_clicked(event):
                         self.selectbar.click_option(event)
-                    else:
-                        self.clicked_box = None
+                    self.clicked_box = None
                     self._add_div_information()
 
                 elif self.duration_inputbox.is_clicked(event):
                     self.clicked_box = self.duration_inputbox
+                    self.clicked_box.press()
 
                 elif self.starting_month_inputbox.is_clicked(event):
                     self.clicked_box = self.starting_month_inputbox
+                    self.clicked_box.press()
 
                 elif self.number_citis_inputbox.is_clicked(event):
                     self.clicked_box = self.number_citis_inputbox
+                    self.clicked_box.press()
 
                 elif self.starting_budget_inputbox.is_clicked(event):
                     self.clicked_box = self.starting_budget_inputbox
+                    self.clicked_box.press()
 
                 elif self.cost_vaccine_inputbox.is_clicked(event):
                     self.clicked_box = self.cost_vaccine_inputbox
+                    self.clicked_box.press()
 
                 elif self.div_type_selectbox.is_clicked(event):
                     if self.clicked_box != self.div_type_selectbox:
@@ -818,15 +829,19 @@ class Visualizer:
 
                 elif self.div_population_inputbox.is_clicked(event):
                     self.clicked_box = self.div_population_inputbox
+                    self.clicked_box.press()
 
                 elif self.div_infected_inputbox.is_clicked(event):
                     self.clicked_box = self.div_infected_inputbox
+                    self.clicked_box.press()
 
                 elif self.div_vaccinated_inputbox.is_clicked(event):
                     self.clicked_box = self.div_vaccinated_inputbox
+                    self.clicked_box.press()
 
                 elif self.div_transport_inputbox.is_clicked(event):
                     self.clicked_box = self.div_transport_inputbox
+                    self.clicked_box.press()
 
                 elif self.start_button.is_clicked(event):
                     self._add_div_information()
@@ -851,6 +866,7 @@ class Visualizer:
                 self.clicked_box.error_message = ''
 
                 if event.key == pygame.K_RETURN:
+                    self.clicked_box.press()
                     self.clicked_box = None
 
                 elif event.key == pygame.K_BACKSPACE and self.clicked_box != self.div_type_selectbox:
@@ -879,7 +895,7 @@ class Visualizer:
         self.max_step = self.simulation.months * 4
 
     def run_simulation(self):
-        """Запустить симуляцию."""
+        """Запустить моделирование."""
         self.screen = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
         pygame.display.set_caption("Моделирование распространения вируса")
         self.clock = pygame.time.Clock()

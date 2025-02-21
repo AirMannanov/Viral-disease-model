@@ -16,6 +16,8 @@ class GovernmentData(TypedDict):
 class GovernmentStatisticsData(TypedDict, CityStatisticsData):
     budget: int
     vaccine_cost: int
+    number_cities: int
+    number_epidemic_cities: int
 
 
 class StatisticsData(TypedDict):
@@ -43,6 +45,7 @@ class Government:
         self.vaccine_cost = vaccine_cost
         self.cities = [City(**params) for params in cities_data]
         self.government_factor = (self.number_infected / self.population) ** 0.5
+        self.epidemic_citites: Dict[str, bool] = {city.name: False for city in self.cities}
 
     def _update_budget(self) -> None:
         """Обновляет бюджет с учётом оплаты налогов."""
@@ -100,6 +103,13 @@ class Government:
         """Возвращает число работающих людей."""
         return sum(city.number_workers for city in self.cities)
 
+    @property
+    def number_epidemic_cities(self) -> int:
+        """Выдать количество городов в которых была или есть эпидемия."""
+        for city in self.cities:
+            self.epidemic_citites[city.name] = self.epidemic_citites[city.name] or (city.number_infected / city.population >= 0.45)
+        return sum(self.epidemic_citites.values())
+
     def get_statistics(self) -> StatisticsData:
         """Возвращает статистику по государству c городами."""
         government_statistics = {
@@ -111,6 +121,8 @@ class Government:
             "number_workers": self.number_workers,
             "budget": self.budget,
             "vaccine_cost": self.vaccine_cost,
+            "number_cities": len(self.cities),
+            "number_epidemic_cities": self.number_epidemic_cities
         }
         cities_statistics = [city.get_statistics() for city in self.cities]
         return {"government": government_statistics, "cities": cities_statistics}
